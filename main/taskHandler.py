@@ -2,14 +2,12 @@ import uasyncio as asyncio
 import ledHandler
 import time
 import wattmeterComInterface
-import evseComInterface
 from ntptime import settime
 from asyn import Lock
 from gc import mem_free, collect
 from machine import Pin,WDT, RTC
 from main import webServerApp
 from main import wattmeter
-from main import evse
 from main import __config__
 import modbusTcp
 
@@ -27,18 +25,15 @@ class TaskHandler:
     def __init__(self,wifi):
         self.setting = __config__.Config()
         self.setting.getConfig()
-        wattInterface = wattmeterComInterface.Interface(9600,lock = Lock(200))
-        evseInterface = evseComInterface.Interface(9600,lock = Lock(200))
+        wattInterface = wattmeterComInterface.Interface(115200,lock = Lock(30))
         self.wattmeter = wattmeter.Wattmeter(wattInterface,self.setting) #Create instance of Wattmeter
-        self.evse = evse.Evse(self.wattmeter,evseInterface,self.setting)
-        self.webServerApp = webServerApp.WebServerApp(wifi,self.wattmeter, self.evse,wattInterface,evseInterface,self.setting) #Create instance of Webserver App
-        self.uModBusTCP = modbusTcp.Server(wattInterface,evseInterface)
+
+        self.webServerApp = webServerApp.WebServerApp(wifi,self.wattmeter, wattInterface, self.setting) #Create instance of Webserver App
         self.settingAfterNewConnection = False
         self.wdt = WDT(timeout=60000) 
         self.wifiManager = wifi
         self.ledErrorHandler = ledHandler.ledHandler(21,1,2,40)
         self.ledWifiHandler =  ledHandler.ledHandler(22,1,2,20) # set pin high on creation
-        self.ledRun  = Pin(23, Pin.OUT) # set pin high on creation
         self.errors = 0
         self.tryOfConnections = 0
         self.wifiManager.turnONAp()#povolit Access point
@@ -123,15 +118,6 @@ class TaskHandler:
     async def interfaceHandler(self):
         while True:
             try:
-                await self.evse.evseHandler()
-                self.ledErrorHandler.removeState(EVSE_ERR)
-                self.errors &= ~EVSE_ERR
-            except Exception as e:
-                self.ledErrorHandler.addState(EVSE_ERR)
-                self.errors |= EVSE_ERR
-                print("EVSE error: {}".format(e))
-            self.memFree()
-            try:
                 await self.wattmeter.wattmeterHandler()
                 self.ledErrorHandler.removeState(WATTMETER_ERR)
                 self.errors &= ~WATTMETER_ERR
@@ -159,6 +145,4 @@ class TaskHandler:
         loop.create_task(self.ledError())
         loop.create_task(self.ledWifi())
         loop.create_task(self.webServerApp.webServerRun())
-        if self.setting.config['sw,MODBUS-TCP'] == '1':
-            loop.create_task(self.uModBusTCP.run(debug=True))
         loop.run_forever()

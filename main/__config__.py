@@ -24,19 +24,8 @@ class Config:
         self.config['sw,AC IN ACTIVE: HIGH']='0'
         self.config['sw,TESTING SOFTWARE']='0'      #Reg 1009sw,AC IN ACTIVE: HIGH
         self.config['sw,Wi-Fi AP'] = '1'          
-        self.config['sw,MODBUS-TCP'] = '0'          
         self.config['ERRORS'] = '0'                                            #Reg 1010
         self.config['ID'] = '0'                                            #Reg 1010
-        self.config['inp,EVSE1']='6'                                     #Reg 1011
-        self.config['inp,EVSE2']='6'                                      #Reg 1011
-        self.config['inp,EVSE3']='6'
-        self.config['inp,EVSE4']='6'
-        self.config['inp,EVSE5']='6'
-        self.config['inp,EVSE6']='6'
-        self.config['inp,EVSE7']='6'
-        self.config['inp,EVSE8']='6'
-        self.config['inp,EVSE9']='6'
-        self.config['inp,EVSE10']='6'
         self.SETTING_PROFILES = 'setting.dat'
         self.handle_configure('txt,ACTUAL SW VERSION',self.boot.get_version(""))
 

@@ -9,13 +9,11 @@ import uasyncio as asyncio
 from main import taskHandler
 
 class WebServerApp:
-    def __init__(self,wlan,wattmeter,evse,wattIO,evseIO,setting):
+    def __init__(self,wlan,wattmeter,wattIO,setting):
         self.wattIO = wattIO
-        self.evseIO = evseIO
         self.wifiManager = wlan
         self.ipAddress = self.wifiManager.getIp()
         self.wattmeter = wattmeter
-        self.evse = evse
         self.port = 8000
         self.datalayer = dict()
         self.setting = setting
@@ -26,7 +24,6 @@ class WebServerApp:
             ("/updateWificlient",self.updateWificlient),
             ("/updateSetting",self.updateSetting),
             ("/updateData", self.updateData), 
-            ("/updateEvse", self.updateEvse), 
             ("/settings", self.settings),
             ("/powerChart", self.powerChart),
             ("/energyChart", self.energyChart),
@@ -76,9 +73,6 @@ class WebServerApp:
                         if ID == 0:
                             async with self.wattIO as w:
                                 data = await w.readWattmeterRegister(reg,1)
-                        else:
-                            async with self.evseIO as e:
-                                data = await e.readEvseRegister(reg,1,ID)
                         if data is None:
                             datalayer = {"process":0,"value":"Error during reading register"}
                         else:
@@ -92,9 +86,6 @@ class WebServerApp:
                         if ID == 0:
                             async with self.wattIO as w:
                                 data = await w.writeWattmeterRegister(reg,[data])
-                        else:
-                            async with self.evseIO as e:
-                                data = await e.writeEvseRegister(reg,[data],ID)
                         
                         if data is None:
                             datalayer = {"process":0,"value":"Error during writing register"}
@@ -134,10 +125,6 @@ class WebServerApp:
             yield from resp.awrite(self.wattmeter.dataLayer.__str__())
             #print("Mem free before:{}; after:{}; rozdil:{} ".format(b,mem_free(),b-mem_free()))
 
-
-    def updateEvse(self,req,resp):
-            yield from picoweb.start_response(resp, "application/json")
-            yield from resp.awrite(self.evse.dataLayer.__str__())
 
     def updateWificlient(self,req, resp):
         
