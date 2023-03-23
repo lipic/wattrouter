@@ -8,24 +8,25 @@ class Config:
         #all variables saved in flash
         self.boot = bootloader.Bootloader('https://github.com/lipic/wattmeter',"")
         self.config = OrderedDict()
-        self.config['bt,RESET WATTMETER'] = '0'       #Reg 1000
-        self.config['sw,AUTOMATIC UPDATE'] = '1'   #Reg 1001
-        self.config['txt,ACTUAL SW VERSION']='0'    #Reg 1002
-        self.config['sw,ENABLE CHARGING']='1'        #Reg 1003
-        self.config['in,MAX-CURRENT-FROM-GRID-A']='25'                             #Reg 1004 
-        self.config['in,TIME-ZONE']='2'                         #Reg 1005
+        self.config['bt,RESET WATTMETER'] = '0'
+        self.config['sw,AUTOMATIC UPDATE'] = '1'
+        self.config['txt,ACTUAL SW VERSION']='0'
+        self.config['sw,ENABLE CHARGING']='1'
+        self.config['in,MAX-CURRENT-FROM-GRID-A']='25'
+        self.config['in,TIME-ZONE']='2'
         self.config['in,EVSE-NUMBER']='1' 
-        self.config['in,PV-GRID-ASSIST-A']='0'                   #Reg 1006
-        self.config['btn,PHOTOVOLTAIC'] = '0'       #Reg 1000
-        self.config['sw,ENABLE BALANCING']='1'     #Reg 1007
-        self.config['sw,WHEN AC IN: RELAY ON']='0' #Reg 1008
-        self.config['sw,WHEN OVERFLOW: RELAY ON']='0' #Reg 1008
-        self.config['sw,WHEN AC IN: CHARGING']='0' #Reg 1008
+        self.config['in,PV-GRID-ASSIST-A']='0'
+        self.config['btn,PHOTOVOLTAIC'] = '0'
+        self.config['sw,ENABLE BALANCING']='1'
+        self.config['sw,WHEN AC IN: RELAY ON']='0'
+        self.config['sw,WHEN OVERFLOW: RELAY ON']='0'
+        self.config['sw,WHEN AC IN: CHARGING']='0'
         self.config['sw,AC IN ACTIVE: HIGH']='0'
-        self.config['sw,TESTING SOFTWARE']='0'      #Reg 1009sw,AC IN ACTIVE: HIGH
+        self.config['sw,TESTING SOFTWARE']='0'
         self.config['sw,Wi-Fi AP'] = '1'          
-        self.config['ERRORS'] = '0'                                            #Reg 1010
-        self.config['ID'] = '0'                                            #Reg 1010
+        self.config['ERRORS'] = '0'
+        self.config['ID'] = '0'
+        self.config['type'] = '3'
         self.SETTING_PROFILES = 'setting.dat'
         self.handle_configure('txt,ACTUAL SW VERSION',self.boot.get_version(""))
 

@@ -178,7 +178,7 @@ class WebServerApp:
         yield from self.app.render_template(resp, "datatable.html", (req,))
 
     def getEspID(self,req,resp):
-        datalayer = {"ID":" Wattmeter: {}".format(self.setting.getConfig()['ID']), "IP":self.wifiManager.getIp()}
+        datalayer = {"ID":" PV-router: {}".format(self.setting.getConfig()['ID']), "IP":self.wifiManager.getIp()}
         yield from picoweb.start_response(resp, "application/json")
         yield from resp.awrite(json.dumps(datalayer))
          
