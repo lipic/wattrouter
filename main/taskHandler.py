@@ -5,12 +5,11 @@ import wattmeterComInterface
 from ntptime import settime
 from asyn import Lock
 from gc import mem_free, collect
-from machine import Pin,WDT, RTC
+from machine import Pin, WDT, RTC
 from main import webServerApp
 from main import wattmeter
 from main import __config__
 import modbusTcp
-
 
 EVSE_ERR = 1
 WATTMETER_ERR = 2
@@ -21,32 +20,32 @@ TIME_SYNC_ERR = 16
 AP = 1
 WIFI = 2
 
+
 class TaskHandler:
-    def __init__(self,wifi):
+    def __init__(self, wifi):
         self.setting = __config__.Config()
         self.setting.getConfig()
-        wattInterface = wattmeterComInterface.Interface(115200,lock = Lock(30))
-        self.wattmeter = wattmeter.Wattmeter(wattInterface,self.setting) #Create instance of Wattmeter
+        wattInterface = wattmeterComInterface.Interface(115200, lock=Lock(30))
+        self.wattmeter = wattmeter.Wattmeter(wattInterface, self.setting)  # Create instance of Wattmeter
 
-        self.webServerApp = webServerApp.WebServerApp(wifi,self.wattmeter, wattInterface, self.setting) #Create instance of Webserver App
+        self.webServerApp = webServerApp.WebServerApp(wifi, self.wattmeter, wattInterface,
+                                                      self.setting)  # Create instance of Webserver App
         self.settingAfterNewConnection = False
-        self.wdt = WDT(timeout=60000) 
+        self.wdt = WDT(timeout=60000)
         self.wifiManager = wifi
-        self.ledErrorHandler = ledHandler.ledHandler(21,1,2,40)
-        self.ledWifiHandler =  ledHandler.ledHandler(22,1,2,20) # set pin high on creation
+        self.ledErrorHandler = ledHandler.ledHandler(21, 1, 2, 40)
+        self.ledWifiHandler = ledHandler.ledHandler(22, 1, 2, 20)  # set pin high on creation
         self.errors = 0
         self.tryOfConnections = 0
-        self.wifiManager.turnONAp()#povolit Access point
+        self.wifiManager.turnONAp()  # povolit Access point
         self.apTimeout = 600
-
- 
 
     def memFree(self):
         before = mem_free()
         collect()
         after = mem_free()
-        #print("Memory before: {} & After: {}".format(before,after))
-        
+        # print("Memory before: {} & After: {}".format(before,after))
+
     async def ledWifi(self):
         while True:
             await self.ledWifiHandler.ledHandler()
@@ -56,18 +55,18 @@ class TaskHandler:
         while True:
             await self.ledErrorHandler.ledHandler()
             await asyncio.sleep(0.1)
-            
+
     async def timeHandler(self):
         while True:
             if self.wifiManager.isConnected() and self.wattmeter.timeInit == False:
                 try:
                     print("Setting time")
                     settime()
-                    rtc=RTC()
+                    rtc = RTC()
                     import utime
-                    tampon1=utime.time() 
-                    tampon2=tampon1+int(self.setting.config["in,TIME-ZONE"])*3600
-                    (year, month, mday, hour, minute, second, weekday, yearday)=utime.localtime(tampon2)
+                    tampon1 = utime.time()
+                    tampon2 = tampon1 + int(self.setting.config["in,TIME-ZONE"]) * 3600
+                    (year, month, mday, hour, minute, second, weekday, yearday) = utime.localtime(tampon2)
                     rtc.datetime((year, month, mday, 0, hour, minute, second, 0))
                     self.wattmeter.timeInit = True
                     self.ledErrorHandler.removeState(TIME_SYNC_ERR)
@@ -75,32 +74,31 @@ class TaskHandler:
                 except Exception as e:
                     self.ledErrorHandler.addState(TIME_SYNC_ERR)
                     self.errors |= TIME_SYNC_ERR
-                    print("Error during time setting: {}".format(e))        
-                
+                    print("Error during time setting: {}".format(e))
+
             await asyncio.sleep(10)
             self.memFree()
-            
-  
+
     async def wifiHandler(self):
         while True:
             try:
                 self.ledWifiHandler.addState(AP)
-                if(self.wifiManager.isConnected() == True):
+                if (self.wifiManager.isConnected() == True):
                     if self.apTimeout > 0:
                         self.apTimeout -= 1
-                    elif((int(self.setting.config['sw,Wi-Fi AP']) == 0) and  self.apTimeout == 0):
+                    elif ((int(self.setting.config['sw,Wi-Fi AP']) == 0) and self.apTimeout == 0):
                         self.wifiManager.turnOfAp()
                         self.ledWifiHandler.removeState(AP)
                     elif (int(self.setting.config['sw,Wi-Fi AP']) == 1):
                         self.wifiManager.turnONAp()
 
                     self.ledWifiHandler.addState(WIFI)
-                    if(self.settingAfterNewConnection == False):
+                    if (self.settingAfterNewConnection == False):
                         self.settingAfterNewConnection = True
                 else:
                     self.ledWifiHandler.removeState(WIFI)
-                    if (len(self.wifiManager.read_profiles())!= 0):                            
-                        if(self.tryOfConnections > 30):
+                    if (len(self.wifiManager.read_profiles()) != 0):
+                        if (self.tryOfConnections > 30):
                             self.tryOfConnections = 0
                             result = await self.wifiManager.get_connection()
                             if result:
@@ -114,7 +112,7 @@ class TaskHandler:
                 print("wifiHandler exception : {}".format(e))
             self.memFree()
             await asyncio.sleep(2)
-                        
+
     async def interfaceHandler(self):
         while True:
             try:
@@ -128,14 +126,14 @@ class TaskHandler:
             self.memFree()
             await asyncio.sleep(1.5)
 
-    #Handler for time
+    # Handler for time
     async def systemHandler(self):
         while True:
             self.setting.config['ERRORS'] = (str)(self.errors)
-            self.wdt.feed()#WDG Handler 
+            self.wdt.feed()  # WDG Handler
             self.memFree()
             await asyncio.sleep(1)
-            
+
     def mainTaskHandlerRun(self):
         loop = asyncio.get_event_loop()
         loop.create_task(self.wifiHandler())
