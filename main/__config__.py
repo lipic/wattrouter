@@ -6,7 +6,7 @@ class Config:
     
     def __init__(self):
         #all variables saved in flash
-        self.boot = bootloader.Bootloader('https://github.com/lipic/wattmeter',"")
+        self.boot = bootloader.Bootloader('https://github.com/lipic/wattrouter',"")
         self.config = OrderedDict()
         self.config['bt,RESET WATTMETER'] = '0'
         self.config['sw,AUTOMATIC UPDATE'] = '1'
