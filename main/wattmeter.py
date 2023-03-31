@@ -24,8 +24,10 @@ class Wattmeter:
         self.setting = setting
         self.dataLayer.data['ID'] = self.setting.config['ID']
         self.logger = ulogging.getLogger("wattmeter")
-        #if debug > 0:
-        self.logger.setLevel(ulogging.DEBUG)
+        if int(self.setting.config['ID']) == 1:
+            self.logger.setLevel(ulogging.DEBUG)
+        else:
+            self.logger.setLevel(ulogging.INFO)
 
 
     async def wattmeterHandler(self):
@@ -44,7 +46,7 @@ class Wattmeter:
         curent_year: str                      = str(time.localtime()[0])[-2:]
         self.dataLayer.data['WATTMETER_TIME'] = ("{0:02}.{1:02}.{2}  {3:02}:{4:02}:{5:02}".format(time.localtime()[2],time.localtime()[1],curent_year,time.localtime()[3],time.localtime()[4],time.localtime()[5]))
 
-        await self.__read_wattmeter_data(6000, 21)
+        await self.__read_wattmeter_data(6002, 21)
 
         if (self.lastMinute != int(time.localtime()[4])) and (self.timeInit == True):
             minute_energy : int = self.dataLayer.data['E1_P_min']-self.dataLayer.data['E1_N_min']
@@ -110,8 +112,7 @@ class Wattmeter:
         try:
             async with self.wattmeterInterface as w:
                 receive_data =  await w.readWattmeterRegister(reg,length)
-                self.logger.info("Len:{} ; Receive data:{} ".format(len(receive_data),receive_data))
-            if (receive_data != "Null") and (reg == 6000):
+            if (receive_data != "Null") and (reg == 6002):
 
                 hdo_input:int = int(((receive_data[0]) << 8) | (receive_data[1]))
                 if hdo_input == 1 and  '1'== self.setting.config['sw,AC IN ACTIVE: HIGH']:
@@ -142,14 +143,14 @@ class Wattmeter:
                 self.logger.info("U1:{} ; I1:{}; P1:{}".format(self.dataLayer.data['U1'], self.dataLayer.data['I1'],self.dataLayer.data['P1']))
 
             else:   
-                self.logger.error("Timed out waiting for result.")
+                self.logger.debug("Timed out waiting for result.")
             
         except Exception as e:
             self.logger.error("Exception: {}. UART is probably not connected.".format(e))
 class DataLayer:
-    def __str__(self):
+    def __str__(self) -> json:
         return json.dumps(self.data)
-    def __init__(self):
+    def __init__(self) -> None:
         self.data: dict        = dict()
         self.data['HDO']       = 0
         self.data['I1']        = 0
@@ -182,7 +183,7 @@ class fileHandler:
     def readData(self,file,length=None):
         data = []
         try:
-            #b = mem_free()
+            b = mem_free()
             csv_gen = self.csv_reader(file)
             row_count = 0
             data = []
@@ -197,7 +198,7 @@ class fileHandler:
                 if cnt>row_count-31:
                     data.append(i.replace("\n",""))
                 collect()
-            #print("Mem free before:{}; after:{}; rozdil:{} ".format(b,mem_free(),b-mem_free()))
+            self.logger.debug("Mem free before:{}; after:{}; diference:{} ".format(b,mem_free(),b-mem_free()))
             return data
         except Exception as e:
             return [] 
