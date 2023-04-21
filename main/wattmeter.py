@@ -1,187 +1,209 @@
 import ujson as json
 import time
 import uasyncio as asyncio
-from machine import Pin,UART
+from machine import Pin, UART
 from gc import collect, mem_free
 import ulogging
+from main.regulation import Regulation
+
 
 class Wattmeter:
-     
-    def __init__(self,wattmeter,setting):
-        self.relay  = Pin(25, Pin.OUT)
-        self.wattmeterInterface = wattmeter
-        self.dataLayer = DataLayer()
-        self.fileHandler = fileHandler()
-        self.DAILY_CONSUMPTION: str = 'daily_consumption.dat'
-        self.timeInit: bool = False
-        self.timeOffset: bool = False
-        self.lastMinute: int =  0
-        self.lastHour: int = 0
-        self.lastDay: int =  0
-        self.lastMonth: int = 0
-        self.lastYear: int = 0
-        self.startUpTime: int = 0
+
+    def __init__(self, wattmeter, setting):
+        self.relay = Pin(25, Pin.OUT)
+        self.wattmeter_interface = wattmeter
+        self.data_layer = DataLayer()
+        self.daily_consumption: str = 'daily_consumption.dat'
+        self.time_init: bool = False
+        self.time_offset: bool = False
+        self.last_minute: int = 0
+        self.last_hour: int = 0
+        self.last_day: int = 0
+        self.last_month: int = 0
+        self.last_year: int = 0
+        self.start_up_time: int = 0
         self.setting = setting
-        self.dataLayer.data['ID'] = self.setting.config['ID']
-        self.logger = ulogging.getLogger("wattmeter")
-        if int(self.setting.config['ID']) == 1:
+        self.data_layer.data['ID'] = self.setting.data['ID']
+        self.logger = ulogging.getLogger("Wattmeter")
+
+        self.regulation = Regulation(setting)
+
+        if int(self.setting.data['sw,TESTING SOFTWARE']) == 1:
             self.logger.setLevel(ulogging.DEBUG)
         else:
             self.logger.setLevel(ulogging.INFO)
 
+        self.file_handler = FileHandler(debug=int(self.setting.data['sw,TESTING SOFTWARE']))
 
-    async def wattmeterHandler(self):
+    async def wattmeter_handler(self) -> None:
 
-        if (self.timeOffset == False) and (self.timeInit == True):
-            self.startUpTime         = time.time()
-            self.lastMinute          = int(time.localtime()[4])
-            self.lastDay             = int(time.localtime()[2])
-            self.lastMonth           = int(time.localtime()[1])
-            self.lastYear            = int(time.localtime()[0])
-            self.dataLayer.data['D'] = self.fileHandler.readData(self.DAILY_CONSUMPTION)
-            self.dataLayer.data["M"] = self.fileHandler.getMonthlyEnergy(self.DAILY_CONSUMPTION)
-            self.timeOffset = True
+        if (self.time_offset is False) and self.time_init:
+            self.start_up_time = time.time()
+            self.last_minute = int(time.localtime()[4])
+            self.last_day = int(time.localtime()[2])
+            self.last_month = int(time.localtime()[1])
+            self.last_year = int(time.localtime()[0])
+            self.data_layer.data['D'] = self.file_handler.read_data(self.daily_consumption)
+            self.data_layer.data["M"] = self.file_handler.get_monthly_energy(self.daily_consumption)
+            self.time_offset = True
 
-        self.dataLayer.data['RUN_TIME']       = time.time() - self.startUpTime
-        curent_year: str                      = str(time.localtime()[0])[-2:]
-        self.dataLayer.data['WATTMETER_TIME'] = ("{0:02}.{1:02}.{2}  {3:02}:{4:02}:{5:02}".format(time.localtime()[2],time.localtime()[1],curent_year,time.localtime()[3],time.localtime()[4],time.localtime()[5]))
+        self.data_layer.data['RUN_TIME'] = time.time() - self.start_up_time
+        curent_year: str = str(time.localtime()[0])[-2:]
+        self.data_layer.data['WATTMETER_TIME'] = (
+            "{0:02}.{1:02}.{2}  {3:02}:{4:02}:{5:02}".format(time.localtime()[2], time.localtime()[1], curent_year,
+                                                             time.localtime()[3], time.localtime()[4],
+                                                             time.localtime()[5]))
 
-        await self.__read_wattmeter_data(6002, 21)
+        await self.__read_wattmeter_data(6002, 22)
+        # await self.regulation.run(power = self.data_layer.data["P1"])
 
-        if (self.lastMinute != int(time.localtime()[4])) and (self.timeInit == True):
-            minute_energy : int = self.dataLayer.data['E1_P_min']-self.dataLayer.data['E1_N_min']
-            if len(self.dataLayer.data["Pm"])<61:
-                self.dataLayer.data["Pm"].append(minute_energy*6)
+        if (self.last_minute != int(time.localtime()[4])) and self.time_init:
+            minute_energy: int = self.data_layer.data['E1_P_min'] - self.data_layer.data['E1_N_min']
+            if len(self.data_layer.data["Pm"]) < 61:
+                self.data_layer.data["Pm"].append(minute_energy * 6)
             else:
-                self.dataLayer.data["Pm"] = self.dataLayer.data["Pm"][1:]
-                self.dataLayer.data["Pm"].append(minute_energy*6)
-            
-            self.dataLayer.data["Pm"][0] = len(self.dataLayer.data["Pm"])
+                self.data_layer.data["Pm"] = self.data_layer.data["Pm"][1:]
+                self.data_layer.data["Pm"].append(minute_energy * 6)
 
-            async with self.wattmeterInterface as w:
-                await w.writeWattmeterRegister(100,[1])
+            self.data_layer.data["Pm"][0] = len(self.data_layer.data["Pm"])
 
-            self.lastMinute = int(time.localtime()[4]) 
+            async with self.wattmeter_interface as w:
+                await w.write_wattmeter_register(100, [1])
 
-        if self.timeInit:
-            if self.lastHour != int(time.localtime()[3]):
+            self.last_minute = int(time.localtime()[4])
 
-                async with self.wattmeterInterface as w:
-                    await w.writeWattmeterRegister(101,[1])
+        if self.time_init:
+            if self.last_hour != int(time.localtime()[3]):
 
-                self.lastHour = int(time.localtime()[3])
-                if len(self.dataLayer.data["Es"])<97:
-                    self.dataLayer.data["Es"].append(self.lastHour)
-                    self.dataLayer.data["Es"].append(self.dataLayer.data['E1_P_hour'])
-                    self.dataLayer.data["Es"].append(self.dataLayer.data['E1_N_hour'])
-                    self.dataLayer.data["Es"].append(self.dataLayer.data['HDO'])
+                async with self.wattmeter_interface as w:
+                    await w.write_wattmeter_register(101, [1])
+
+                self.last_hour = int(time.localtime()[3])
+                if len(self.data_layer.data["Es"]) < 97:
+                    self.data_layer.data["Es"].append(self.last_hour)
+                    self.data_layer.data["Es"].append(self.data_layer.data['E1_P_hour'])
+                    self.data_layer.data["Es"].append(self.data_layer.data['E_SAVED'])
+                    self.data_layer.data["Es"].append(self.data_layer.data['HDO'])
                 else:
-                    self.dataLayer.data["Es"] = self.dataLayer.data["Es"][4:]
-                    self.dataLayer.data["Es"].append(self.lastHour)
-                    self.dataLayer.data["Es"].append(self.dataLayer.data['E1_P_hour'])
-                    self.dataLayer.data["Es"].append(self.dataLayer.data['E1_N_hour'])
-                    self.dataLayer.data["Es"].append(self.dataLayer.data['HDO'])
-            
-                self.dataLayer.data["Es"][0] = len(self.dataLayer.data["Es"])
-            
+                    self.data_layer.data["Es"] = self.data_layer.data["Es"][4:]
+                    self.data_layer.data["Es"].append(self.last_hour)
+                    self.data_layer.data["Es"].append(self.data_layer.data['E1_P_hour'])
+                    self.data_layer.data["Es"].append(self.data_layer.data['E_SAVED'])
+                    self.data_layer.data["Es"].append(self.data_layer.data['HDO'])
+
+                self.data_layer.data["Es"][0] = len(self.data_layer.data["Es"])
+
             else:
-                if len(self.dataLayer.data["Es"])<97:
-                    self.dataLayer.data["Es"][len(self.dataLayer.data["Es"])-3] = self.dataLayer.data['E1_P_hour']
-                    self.dataLayer.data["Es"][len(self.dataLayer.data["Es"])-2] = self.dataLayer.data['E1_N_hour']
-                    self.dataLayer.data["Es"][len(self.dataLayer.data["Es"])-1] = self.dataLayer.data['HDO']
+                if len(self.data_layer.data["Es"]) < 97:
+                    self.data_layer.data["Es"][len(self.data_layer.data["Es"]) - 3] = self.data_layer.data['E1_P_hour']
+                    self.data_layer.data["Es"][len(self.data_layer.data["Es"]) - 2] = self.data_layer.data['E_SAVED']
+                    self.data_layer.data["Es"][len(self.data_layer.data["Es"]) - 1] = self.data_layer.data['HDO']
                 else:
-                    self.dataLayer.data["Es"][94] = self.dataLayer.data['E1_P_hour']
-                    self.dataLayer.data["Es"][95] = self.dataLayer.data['E1_N_hour']
-                    self.dataLayer.data["Es"][96] = self.dataLayer.data['HDO']
-        
-        if (self.lastDay != int(time.localtime()[2])) and self.timeInit and self.timeOffset:
+                    self.data_layer.data["Es"][94] = self.data_layer.data['E1_P_hour']
+                    self.data_layer.data["Es"][95] = self.data_layer.data['E_SAVED']
+                    self.data_layer.data["Es"][96] = self.data_layer.data['HDO']
 
-            day = {("{0:02}/{1:02}/{2}".format(self.lastMonth,self.lastDay ,str(self.lastYear)[-2:] )) : [self.dataLayer.data["E1_P_day"], self.dataLayer.data["E1_N_day"]]}
-            async with self.wattmeterInterface as w:
-                await w.writeWattmeterRegister(102,[1])
-            
-            self.lastYear  = int(time.localtime()[0])
-            self.lastMonth = int(time.localtime()[1])
-            self.lastDay   = int(time.localtime()[2])
-            self.fileHandler.writeData(self.DAILY_CONSUMPTION, day)
-            self.dataLayer.data["D"] =  self.fileHandler.readData(self.DAILY_CONSUMPTION,31)
-            self.dataLayer.data["M"] = self.fileHandler.getMonthlyEnergy(self.DAILY_CONSUMPTION)
+        if (self.last_day != int(time.localtime()[2])) and self.time_init and self.time_offset:
+            day = {("{0:02}/{1:02}/{2}".format(self.last_month, self.last_day, str(self.last_year)[-2:])): [
+                self.data_layer.data["E1_P_day"], self.data_layer.data["E_SAVED"]]}
+            async with self.wattmeter_interface as w:
+                await w.write_wattmeter_register(102, [1])
 
-    async def __read_wattmeter_data(self, reg:int, length:int)-> None:
+            self.last_year = int(time.localtime()[0])
+            self.last_month = int(time.localtime()[1])
+            self.last_day = int(time.localtime()[2])
+            self.file_handler.write_data(self.daily_consumption, day)
+            self.data_layer.data["D"] = self.file_handler.read_data(self.daily_consumption, 31)
+            self.data_layer.data["M"] = self.file_handler.get_monthly_energy(self.daily_consumption)
+
+    async def __read_wattmeter_data(self, reg: int, length: int) -> None:
 
         try:
-            async with self.wattmeterInterface as w:
-                receive_data =  await w.readWattmeterRegister(reg,length)
-            if (receive_data != "Null") and (reg == 6002):
+            async with self.wattmeter_interface as w:
+                receive_data = await w.read_wattmeter_register(reg, length)
 
-                hdo_input:int = int(((receive_data[0]) << 8) | (receive_data[1]))
-                if hdo_input == 1 and  '1'== self.setting.config['sw,AC IN ACTIVE: HIGH']:
-                    self.dataLayer.data['HDO'] = 1
-                elif hdo_input == 0 and  '0'== self.setting.config['sw,AC IN ACTIVE: HIGH']:
-                    self.dataLayer.data['HDO'] = 1
+            if (len(receive_data) >= length*2) and (reg == 6002):
+
+                hdo_input: int = int(((receive_data[0]) << 8) | (receive_data[1]))
+                if hdo_input == 1 and '1' == self.setting.data['sw,AC IN ACTIVE: HIGH']:
+                    self.data_layer.data['HDO'] = 1
+                elif hdo_input == 0 and '0' == self.setting.data['sw,AC IN ACTIVE: HIGH']:
+                    self.data_layer.data['HDO'] = 1
                 else:
-                    self.dataLayer.data['HDO'] = 0
+                    self.data_layer.data['HDO'] = 0
 
-                self.dataLayer.data['I1']         = int(((receive_data[2]) << 8) | (receive_data[3]))
-                self.dataLayer.data['P1']         = int(((receive_data[4]) << 8) | (receive_data[5]))
-                self.dataLayer.data['U1']         = int(((receive_data[6]) << 8) | (receive_data[7]))
-                self.dataLayer.data['E1_P_min']   = int(((receive_data[8]) << 8) | (receive_data[9]))
-                self.dataLayer.data['E1_N_min']   = int(((receive_data[10]) << 8) | (receive_data[11]))
-                self.dataLayer.data['E1_P_hour']  = int(((receive_data[12]) << 8) | (receive_data[13]))
-                self.dataLayer.data['E1_N_hour']  = int(((receive_data[14]) << 8) | (receive_data[15]))
-                self.dataLayer.data['E1_P_day']   = int(((receive_data[16]) << 8) | (receive_data[17]))
-                self.dataLayer.data['E1_N_day']   = int(((receive_data[18]) << 8) | (receive_data[19]))
-                self.dataLayer.data['E1_P']       = int((receive_data[22] << 24) | (receive_data[23] << 16) | (receive_data[20] << 8) | receive_data[21])
-                self.dataLayer.data['E1_N']       = int((receive_data[26] << 24) | (receive_data[27] << 16) | (receive_data[24] << 8) | receive_data[25])
-                self.dataLayer.data['I_TUV']      = int(((receive_data[28]) << 8) | (receive_data[29]))
-                self.dataLayer.data['P_TUV']      = int(((receive_data[30]) << 8) | (receive_data[31]))
-                self.dataLayer.data['E_TUV_min']  = int(((receive_data[32]) << 8) | (receive_data[33]))
-                self.dataLayer.data['E_TUV_hour'] = int(((receive_data[34]) << 8) | (receive_data[35]))
-                self.dataLayer.data['E_TUV_day']  = int(((receive_data[36]) << 8) | (receive_data[37]))
-                self.dataLayer.data['E_TUV']      = int((receive_data[40] << 24) | (receive_data[41] << 16) | (receive_data[38] << 8) | receive_data[39])
-     
-                self.logger.info("U1:{} ; I1:{}; P1:{}".format(self.dataLayer.data['U1'], self.dataLayer.data['I1'],self.dataLayer.data['P1']))
+                self.data_layer.data['I1'] = int(((receive_data[2]) << 8) | (receive_data[3]))
+                self.data_layer.data['P1'] = int(((receive_data[4]) << 8) | (receive_data[5]))
+                self.data_layer.data['U1'] = int(((receive_data[6]) << 8) | (receive_data[7]))
+                self.data_layer.data['E1_P_min'] = int(((receive_data[8]) << 8) | (receive_data[9]))
+                self.data_layer.data['E1_N_min'] = int(((receive_data[10]) << 8) | (receive_data[11]))
+                self.data_layer.data['E1_P_hour'] = int(((receive_data[12]) << 8) | (receive_data[13]))
+                self.data_layer.data['E1_N_hour'] = int(((receive_data[14]) << 8) | (receive_data[15]))
+                self.data_layer.data['E1_P_day'] = int(((receive_data[16]) << 8) | (receive_data[17]))
+                self.data_layer.data['E1_N_day'] = int(((receive_data[18]) << 8) | (receive_data[19]))
+                self.data_layer.data['E1_P'] = int(
+                    (receive_data[22] << 24) | (receive_data[23] << 16) | (receive_data[20] << 8) | receive_data[21])
+                self.data_layer.data['E1_N'] = int(
+                    (receive_data[26] << 24) | (receive_data[27] << 16) | (receive_data[24] << 8) | receive_data[25])
+                self.data_layer.data['I_TUV'] = int(((receive_data[28]) << 8) | (receive_data[29]))
+                self.data_layer.data['P_TUV'] = int(((receive_data[30]) << 8) | (receive_data[31]))
+                self.data_layer.data['E_TUV_min'] = int(((receive_data[32]) << 8) | (receive_data[33]))
+                self.data_layer.data['E_TUV_hour'] = int(((receive_data[34]) << 8) | (receive_data[35]))
+                self.data_layer.data['E_TUV_day'] = int(((receive_data[36]) << 8) | (receive_data[37]))
+                self.data_layer.data['E_TUV'] = int(
+                    (receive_data[40] << 24) | (receive_data[41] << 16) | (receive_data[38] << 8) | receive_data[39])
+                self.data_layer.data['E_SAVED'] = int(((receive_data[43]) << 8) | (receive_data[42]))
 
-            else:   
+            else:
                 self.logger.debug("Timed out waiting for result.")
-            
+
         except Exception as e:
             self.logger.error("Exception: {}. UART is probably not connected.".format(e))
+
+
 class DataLayer:
     def __str__(self) -> json:
         return json.dumps(self.data)
+
     def __init__(self) -> None:
-        self.data: dict        = dict()
-        self.data['HDO']       = 0
-        self.data['I1']        = 0
-        self.data['U1']        = 0
-        self.data['P1']        = 0
-        self.data['E1_P_min']  = 0
-        self.data['E1_N_min']  = 0
+        self.data: dict = dict()
+        self.data['HDO'] = 0
+        self.data['I1'] = 0
+        self.data['U1'] = 0
+        self.data['P1'] = 0
+        self.data['E1_P_min'] = 0
+        self.data['E1_N_min'] = 0
         self.data['E1_P_hour'] = 0
         self.data['E1_N_hour'] = 0
-        self.data['E1_P_day']  = 0
-        self.data['E1_N_day']  = 0
-        self.data['E1_P']      = 0
-        self.data['E1_N']      = 0
-        self.data['I_TUV']     = 0
-        self.data['P_TUV']     = 0
+        self.data['E1_P_day'] = 0
+        self.data['E1_N_day'] = 0
+        self.data['E1_P'] = 0
+        self.data['E1_N'] = 0
+        self.data['I_TUV'] = 0
+        self.data['P_TUV'] = 0
         self.data['E_TUV_min'] = 0
-        self.data['E_TUV_hour']= 0
+        self.data['E_TUV_hour'] = 0
         self.data['E_TUV_day'] = 0
-        self.data['E_TUV']     = 0
-        self.data["Pm"]        = [0]   #minute power
-        self.data["Es"]        = [0]   #Hour energy
-        self.data['D']         = None  #Daily energy
-        self.data['M']         = None  #Monthly energy
-        self.data['RUN_TIME']  = 0
+        self.data['E_TUV'] = 0
+        self.data['E_SAVED'] = 0
+        self.data["Pm"] = [0]  # minute power
+        self.data["Es"] = [0]  # Hour energy
+        self.data['D'] = None  # Daily energy
+        self.data['M'] = None  # Monthly energy
+        self.data['RUN_TIME'] = 0
         self.data['WATTMETER_TIME'] = 0
-        self.data['ID']        = 0
+        self.data['ID'] = 0
 
-class fileHandler:
-                
-    def readData(self,file,length=None):
-        data = []
+
+class FileHandler:
+    def __init__(self, debug: int) -> None:
+        self.logger = ulogging.getLogger("FileHandler")
+        if debug == 1:
+            self.logger.setLevel(ulogging.DEBUG)
+        else:
+            self.logger.setLevel(ulogging.INFO)
+
+    def read_data(self, file: str):
         try:
             b = mem_free()
             csv_gen = self.csv_reader(file)
@@ -194,67 +216,71 @@ class fileHandler:
             csv_gen = self.csv_reader(file)
             cnt = 0
             for i in csv_gen:
-                cnt+=1
-                if cnt>row_count-31:
-                    data.append(i.replace("\n",""))
+                cnt += 1
+                if cnt > row_count - 31:
+                    data.append(i.replace("\n", ""))
                 collect()
-            self.logger.debug("Mem free before:{}; after:{}; diference:{} ".format(b,mem_free(),b-mem_free()))
+            self.logger.debug("Mem free before:{}; after:{}; difference:{} ".format(b, mem_free(), b - mem_free()))
             return data
         except Exception as e:
-            return [] 
-    
-    def csv_reader(self,file_name):
+            self.logger.error("Read wattmeter data error: {}.".format(e))
+            return []
+
+    def csv_reader(self, file_name: str):
         for row in open(file_name, "r"):
             try:
                 yield row
             except StopIteration:
                 return
 
-    def getMonthlyEnergy(self,file):
-        energy = []
-        lastMonth = 0
-        lastYear = 0
-        positiveEnergy = 0
-        negativeEnergy = 0
+    def get_monthly_energy(self, file: str) -> list[str]:
+        energy: list[str] = []
+        last_month: int = 0
+        last_year: int = 0
+        positive_energy: int = 0
+        negative_energy: int = 0
 
         try:
+            b = mem_free()
             csv_gen = self.csv_reader(file)
             for line in csv_gen:
-                line = line.replace("\n","").replace("/",":").replace("[","").replace("]","").replace(",",":").replace(" ","").split(":")
-                #print("0 - Mem free before:{}; after:{}; rozdil:{} ".format(b,mem_free(),b-mem_free()))
-                if lastMonth == 0:
-                    lastMonth = int(line[0])
-                    lastYear = int(line[2])
+                line = line.replace("\n", "").replace("/", ":").replace("[", "").replace("]", "").replace(",",
+                                                                                                          ":").replace(
+                    " ", "").split(":")
+                self.logger.debug("Mem free before:{}; after:{}; diference:{} ".format(b, mem_free(), b - mem_free()))
+                if last_month == 0:
+                    last_month = int(line[0])
+                    last_year = int(line[2])
 
-                if lastMonth != int(line[0]):
-                    if len(energy)<36:
-                        energy.append("{}/{}:[{},{}]".format(lastMonth,lastYear,positiveEnergy,negativeEnergy))
+                if last_month != int(line[0]):
+                    if len(energy) < 36:
+                        energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
                     else:
                         energy = energy[1:]
-                        energy.append("{}/{}:[{},{}]".format(lastMonth,lastYear,positiveEnergy,negativeEnergy))
-                    positiveEnergy = 0
-                    negativeEnergy = 0
-                    lastMonth = int(line[0])
-                    lastYear = int(line[2])
+                        energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
+                    positive_energy = 0
+                    negative_energy = 0
+                    last_month = int(line[0])
+                    last_year = int(line[2])
 
-                positiveEnergy += int(line[3])
-                negativeEnergy += int(line[4])
-                collect()                
+                positive_energy += int(line[3])
+                negative_energy += int(line[4])
+                collect()
 
-            if len(energy)<36:
-                energy.append("{}/{}:[{},{}]".format(lastMonth,lastYear,positiveEnergy,negativeEnergy))
+            if len(energy) < 36:
+                energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
             else:
                 energy = energy[1:]
-                energy.append("{}/{}:[{},{}]".format(lastMonth,lastYear,positiveEnergy,negativeEnergy))
-            return energy    
-                
-        except Exception as e:
-            print("Error: ",e)
+                energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
+            return energy
 
-    def writeData(self,file,data):
+        except Exception as e:
+            self.logger.error("Get monthly energy error: {}.".format(e))
+
+    def write_data(self, file: str, data: dict[str, list]) -> None:
         lines = []
         for variable, value in data.items():
-            lines.append(("%s:%s\n" % (variable, value)).replace(" ",""))
-            
+            lines.append(("%s:%s\n" % (variable, value)).replace(" ", ""))
+
         with open(file, "a+") as f:
             f.write(''.join(lines))
