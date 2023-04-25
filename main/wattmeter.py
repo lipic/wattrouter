@@ -188,8 +188,8 @@ class DataLayer:
         self.data['E_SAVED'] = 0
         self.data["Pm"] = [0]  # minute power
         self.data["Es"] = [0]  # Hour energy
-        self.data['D'] = None  # Daily energy
-        self.data['M'] = None  # Monthly energy
+        self.data['D'] = []  # Daily energy
+        self.data['M'] = []  # Monthly energy
         self.data['RUN_TIME'] = 0
         self.data['WATTMETER_TIME'] = 0
         self.data['ID'] = 0
@@ -272,10 +272,13 @@ class FileHandler:
             else:
                 energy = energy[1:]
                 energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
+            if energy is None:
+                return []
             return energy
 
         except Exception as e:
             self.logger.error("Get monthly energy error: {}.".format(e))
+            return []
 
     def write_data(self, file: str, data: dict[str, list]) -> None:
         lines = []
