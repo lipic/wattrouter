@@ -12,24 +12,31 @@ class Config:
         """
         self.boot = bootloader.Bootloader('https://github.com/lipic/wattrouter', "")
         self.data = OrderedDict()
-        self.data['bt,RESET PV-ROUTER'] = '0'
-        self.data['sw,AUTOMATIC UPDATE'] = '1'
         self.data['txt,ACTUAL SW VERSION'] = '0'
 
-        self.data['in,TUV-VOLUME'] = '200'
-        self.data['in,TUV-POWER'] = '2200'
-        self.data['in,TIME-ZONE'] = '2'
-
+        self.data['sw,AUTOMATIC UPDATE'] = '1'
         self.data['sw,TESTING SOFTWARE'] = '0'
         self.data['sw,Wi-Fi AP'] = '1'
         self.data['sw,AC IN ACTIVE: HIGH'] = '0'
         self.data['sw,WHEN AC IN: RELAY ON'] = '0'
         self.data['sw,WHEN OVERFLOW: RELAY ON'] = '0'
-        self.data['sw,WHEN AC IN: CHARGING'] = '0'
-        #self.config['btn,PHOTOVOLTAIC'] = '0'
+
+        self.data['bt,RESET PV-ROUTER'] = '0'
+        self.data['btn,BOOST-MODE'] = '0'
+
+        self.data['in,TUV-VOLUME'] = '200'
+        self.data['in,TUV-POWER'] = '2200'
+        self.data['in,NIGHT-BOOST'] = '64800'
+        self.data['in,NIGHT-TEMPERATURE'] = '55'
+        self.data['in,MORNING-BOOST'] = '21600'
+        self.data['in,MORNING-TEMPERATURE'] = '40'
+        self.data['in,BOOST-TIMEOUT'] = '120'
+        self.data['in,TIME-ZONE'] = '2'
+
+        self.data['BOOST_MODE'] = '0'
         self.data['ERRORS'] = '0'
         self.data['ID'] = '0'
-        self.data['type'] = '3'
+        self.data['TYPE'] = '3'
 
         self.logger = ulogging.getLogger("__config__")
         if int(self.data['sw,TESTING SOFTWARE']) == 1:
@@ -80,7 +87,10 @@ class Config:
     # Update self.config. Write new value to self.config and to file setting.dat
     def handle_configure(self, variable: str, value: str) -> bool:
         try:
-            self.handle_different_requests(variable)
+            if variable == 'bt,RESET PV-ROUTER':
+                from machine import reset
+                reset()
+
             if len(variable) > 0:
                 try:
                     setting = self.read_setting()
@@ -98,12 +108,6 @@ class Config:
             self.logger.error("handle_configure exception: {}.".format(e))
             return False
 
-    def handle_different_requests(self, variable: str) -> None:
-        if variable == 'bt,RESET WATTMETER':
-            from machine import reset
-            reset()
-
-    # If exist read setting from setting.dat, esle create setting
     def read_setting(self) -> dict:
         with open(self.setting_profile) as f:
             lines: list[str] = f.readlines()
