@@ -22,11 +22,11 @@ WIFI: int = 2
 
 class TaskHandler:
     def __init__(self, wifi):
-        self.setting = __config__.Config()
-        self.setting.get_config()
+        self.config = __config__.Config()
+        self.config.get_config()
         watt_interface = wattmeter_com_interface.Interface(115200, lock=Lock(30))
-        self.wattmeter = wattmeter.Wattmeter(wattmeter_com_interface.Interface(115200, lock=Lock(30)), self.setting)
-        self.web_server_app = web_server_app.WebServerApp(wifi, self.wattmeter, watt_interface, self.setting)
+        self.wattmeter = wattmeter.Wattmeter(wattmeter_interface=watt_interface, config=self.config)
+        self.web_server_app = web_server_app.WebServerApp(wifi, self.wattmeter, watt_interface, self.config)
         self.setting_after_new_connection: bool = False
         self.wdt = WDT(timeout=60000)
         self.wifi_manager = wifi
@@ -38,7 +38,7 @@ class TaskHandler:
         self.wifi_manager.turnONAp()
 
         self.logger = ulogging.getLogger("TaskHandler")
-        if int(self.setting.data['sw,TESTING SOFTWARE']) == 1:
+        if int(self.config.data['sw,TESTING SOFTWARE']) == 1:
             self.logger.setLevel(ulogging.DEBUG)
         else:
             self.logger.setLevel(ulogging.INFO)
@@ -68,7 +68,7 @@ class TaskHandler:
                     rtc = RTC()
                     import utime
                     tampon1 = utime.time()
-                    tampon2 = tampon1 + int(self.setting.data["in,TIME-ZONE"]) * 3600
+                    tampon2 = tampon1 + int(self.config.data["in,TIME-ZONE"]) * 3600
                     (year, month, mday, hour, minute, second, weekday, yearday) = utime.localtime(tampon2)
                     rtc.datetime((year, month, mday, 0, hour, minute, second, 0))
                     self.wattmeter.time_init = True
@@ -89,10 +89,10 @@ class TaskHandler:
                 if self.wifi_manager.isConnected():
                     if self.ap_timeout > 0:
                         self.ap_timeout -= 1
-                    elif (int(self.setting.data['sw,Wi-Fi AP']) == 0) and self.ap_timeout == 0:
+                    elif (int(self.config.data['sw,Wi-Fi AP']) == 0) and self.ap_timeout == 0:
                         self.wifi_manager.turnOfAp()
                         self.led_wifi_handler.remove_state(AP)
-                    elif int(self.setting.data['sw,Wi-Fi AP']) == 1:
+                    elif int(self.config.data['sw,Wi-Fi AP']) == 1:
                         self.wifi_manager.turnONAp()
 
                     self.led_wifi_handler.add_state(WIFI)
@@ -132,7 +132,7 @@ class TaskHandler:
     # Handler for time
     async def system_handler(self) -> None:
         while True:
-            self.setting.data['ERRORS'] = str(self.errors)
+            self.config.data['ERRORS'] = str(self.errors)
             self.wdt.feed()
             self.mem_free()
             await asyncio.sleep(1)

@@ -1,17 +1,17 @@
 import ujson as json
 import time
-import uasyncio as asyncio
 from machine import Pin, UART
 from gc import collect, mem_free
 import ulogging
 from main.regulation import Regulation
+from collections import OrderedDict
 
 
 class Wattmeter:
 
-    def __init__(self, wattmeter, setting):
+    def __init__(self, wattmeter_interface, config: OrderedDict[str, str]):
         self.relay = Pin(25, Pin.OUT)
-        self.wattmeter_interface = wattmeter
+        self.wattmeter_interface = wattmeter_interface
         self.data_layer = DataLayer()
         self.daily_consumption: str = 'daily_consumption.dat'
         self.time_init: bool = False
@@ -22,18 +22,18 @@ class Wattmeter:
         self.last_month: int = 0
         self.last_year: int = 0
         self.start_up_time: int = 0
-        self.setting = setting
-        self.data_layer.data['ID'] = self.setting.data['ID']
+        self.config = config
+        self.data_layer.data['ID'] = self.config.data['ID']
         self.logger = ulogging.getLogger("Wattmeter")
 
-        self.regulation = Regulation(setting)
+        self.regulation = Regulation(wattmeter=self, config=self.config)
 
-        if int(self.setting.data['sw,TESTING SOFTWARE']) == 1:
+        if int(self.config.data['sw,TESTING SOFTWARE']) == 1:
             self.logger.setLevel(ulogging.DEBUG)
         else:
             self.logger.setLevel(ulogging.INFO)
 
-        self.file_handler = FileHandler(debug=int(self.setting.data['sw,TESTING SOFTWARE']))
+        self.file_handler = FileHandler(debug=int(self.config.data['sw,TESTING SOFTWARE']))
 
     async def wattmeter_handler(self) -> None:
 
@@ -55,8 +55,8 @@ class Wattmeter:
                                                              time.localtime()[5]))
 
         await self.__read_wattmeter_data(6002, 22)
-        # await self.regulation.run(power = self.data_layer.data["P1"])
-
+        self.regulation.run(hour=time.localtime()[3], minute=time.localtime()[4])
+        # print(self.last_minute, int(time.localtime()[4]), self.time_init)
         if (self.last_minute != int(time.localtime()[4])) and self.time_init:
             minute_energy: int = self.data_layer.data['E1_P_min'] - self.data_layer.data['E1_N_min']
             if len(self.data_layer.data["Pm"]) < 61:
@@ -93,6 +93,7 @@ class Wattmeter:
 
                 self.data_layer.data["Es"][0] = len(self.data_layer.data["Es"])
 
+
             else:
                 if len(self.data_layer.data["Es"]) < 97:
                     self.data_layer.data["Es"][len(self.data_layer.data["Es"]) - 3] = self.data_layer.data['E1_P_hour']
@@ -122,12 +123,12 @@ class Wattmeter:
             async with self.wattmeter_interface as w:
                 receive_data = await w.read_wattmeter_register(reg, length)
 
-            if (len(receive_data) >= length*2) and (reg == 6002):
+            if (len(receive_data) >= length * 2) and (reg == 6002):
 
                 hdo_input: int = int(((receive_data[0]) << 8) | (receive_data[1]))
-                if hdo_input == 1 and '1' == self.setting.data['sw,AC IN ACTIVE: HIGH']:
+                if hdo_input == 1 and '1' == self.config.data['sw,AC IN ACTIVE: HIGH']:
                     self.data_layer.data['HDO'] = 1
-                elif hdo_input == 0 and '0' == self.setting.data['sw,AC IN ACTIVE: HIGH']:
+                elif hdo_input == 0 and '0' == self.config.data['sw,AC IN ACTIVE: HIGH']:
                     self.data_layer.data['HDO'] = 1
                 else:
                     self.data_layer.data['HDO'] = 0

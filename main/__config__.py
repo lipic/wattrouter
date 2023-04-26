@@ -33,7 +33,7 @@ class Config:
         self.data['in,BOOST-TIMEOUT'] = '120'
         self.data['in,TIME-ZONE'] = '2'
 
-        self.data['BOOST_MODE'] = '0'
+        self.data['BOOST'] = '0'
         self.data['ERRORS'] = '0'
         self.data['ID'] = '0'
         self.data['TYPE'] = '3'
