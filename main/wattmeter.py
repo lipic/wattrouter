@@ -55,7 +55,7 @@ class Wattmeter:
                                                              time.localtime()[5]))
 
         await self.__read_wattmeter_data(6002, 22)
-        self.regulation.run(hour=time.localtime()[3], minute=time.localtime()[4])
+        self.regulation.run(hour=time.localtime()[3], minute=time.localtime()[4], power=self.data_layer.data['P1'])
         # print(self.last_minute, int(time.localtime()[4]), self.time_init)
         if (self.last_minute != int(time.localtime()[4])) and self.time_init:
             minute_energy: int = self.data_layer.data['E1_P_min'] - self.data_layer.data['E1_N_min']
