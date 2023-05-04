@@ -131,12 +131,17 @@ class WebServerApp:
         collect()
         if req.method == "POST":
             datalayer = {}
-            req = await self.process_msg(req)
-            for i in req.form:
-                i = json.loads(i)
-                datalayer = await self.wifi_manager.handle_configure(i["ssid"], i["password"])
-                self.ip_address = self.wifi_manager.getIp()
-                datalayer = {"process": datalayer, "ip": self.ip_address}
+            size = int(req.headers[b"Content-Length"])
+            qs = yield from req.reader.read(size)
+            req.qs = qs.decode()
+            try:
+                i = json.loads(req.qs)
+            except:
+                pass
+            datalayer = await self.wifiManager.handle_configure(i["ssid"], i["password"])
+            self.ip_address = self.wifiManager.getIp()
+            datalayer = {"process": datalayer, "ip": self.ip_address}
+
             yield from picoweb.start_response(resp, "application/json")
             yield from resp.awrite(json.dumps(datalayer))
 
