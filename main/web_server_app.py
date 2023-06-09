@@ -130,7 +130,6 @@ class WebServerApp:
     def update_wificlient(self, req, resp) -> None:
         collect()
         if req.method == "POST":
-            datalayer = {}
             size = int(req.headers[b"Content-Length"])
             qs = yield from req.reader.read(size)
             req.qs = qs.decode()
@@ -138,8 +137,8 @@ class WebServerApp:
                 i = json.loads(req.qs)
             except:
                 pass
-            datalayer = await self.wifiManager.handle_configure(i["ssid"], i["password"])
-            self.ip_address = self.wifiManager.getIp()
+            datalayer = await self.wifi_manager.handle_configure(i["ssid"], i["password"])
+            self.ip_address = self.wifi_manager.getIp()
             datalayer = {"process": datalayer, "ip": self.ip_address}
 
             yield from picoweb.start_response(resp, "application/json")

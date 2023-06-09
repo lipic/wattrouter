@@ -126,8 +126,8 @@ class TaskHandler:
                 self.led_error_handler.add_state(WATTMETER_ERR)
                 self.errors |= WATTMETER_ERR
                 self.logger.info("interface_handler error: {}".format(e))
-            self.mem_free()
-            await asyncio.sleep(1)
+
+            await asyncio.sleep(0.3)
 
     # Handler for time
     async def system_handler(self) -> None:

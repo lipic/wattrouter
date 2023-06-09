@@ -10,9 +10,9 @@ from collections import OrderedDict
 class Wattmeter:
 
     def __init__(self, wattmeter_interface, config: OrderedDict[str, str]):
-        self.relay = Pin(25, Pin.OUT)
+        self.relay: Pin = Pin(25, Pin.OUT)
         self.wattmeter_interface = wattmeter_interface
-        self.data_layer = DataLayer()
+        self.data_layer: DataLayer = DataLayer()
         self.daily_consumption: str = 'daily_consumption.dat'
         self.time_init: bool = False
         self.time_offset: bool = False
@@ -21,6 +21,7 @@ class Wattmeter:
         self.last_day: int = 0
         self.last_month: int = 0
         self.last_year: int = 0
+        self.average_power: list = []
         self.start_up_time: int = 0
         self.config = config
         self.data_layer.data['ID'] = self.config.data['ID']
@@ -55,8 +56,9 @@ class Wattmeter:
                                                              time.localtime()[5]))
 
         await self.__read_wattmeter_data(6002, 22)
-        self.regulation.run(hour=time.localtime()[3], minute=time.localtime()[4], power=self.data_layer.data['P1'])
-        # print(self.last_minute, int(time.localtime()[4]), self.time_init)
+        self.regulation.run(hour=time.localtime()[3], minute=time.localtime()[4],
+                            power=self.data_layer.data['P_REGULATION'])
+
         if (self.last_minute != int(time.localtime()[4])) and self.time_init:
             minute_energy: int = self.data_layer.data['E1_P_min'] - self.data_layer.data['E1_N_min']
             if len(self.data_layer.data["Pm"]) < 61:
@@ -134,7 +136,16 @@ class Wattmeter:
                     self.data_layer.data['HDO'] = 0
 
                 self.data_layer.data['I1'] = int(((receive_data[2]) << 8) | (receive_data[3]))
-                self.data_layer.data['P1'] = int(((receive_data[4]) << 8) | (receive_data[5]))
+
+                self.average_power.append(int(((receive_data[4]) << 8) | (receive_data[5])))
+                if len(self.average_power) > 5:
+                    self.average_power = self.average_power[1:]
+                actual_power: int = 0
+                count: int = 0
+                for power in self.average_power:
+                    actual_power += (power - 65536) if power > 32767 else power
+                    count += 1
+                self.data_layer.data['P1'] = int(actual_power/count)
                 self.data_layer.data['U1'] = int(((receive_data[6]) << 8) | (receive_data[7]))
                 self.data_layer.data['E1_P_min'] = int(((receive_data[8]) << 8) | (receive_data[9]))
                 self.data_layer.data['E1_N_min'] = int(((receive_data[10]) << 8) | (receive_data[11]))
@@ -151,9 +162,9 @@ class Wattmeter:
                 self.data_layer.data['E_TUV_min'] = int(((receive_data[32]) << 8) | (receive_data[33]))
                 self.data_layer.data['E_TUV_hour'] = int(((receive_data[34]) << 8) | (receive_data[35]))
                 self.data_layer.data['E_TUV_day'] = int(((receive_data[36]) << 8) | (receive_data[37]))
+                self.data_layer.data['P_REGULATION'] = int(((receive_data[38]) << 8) | (receive_data[39]))
                 self.data_layer.data['E_TUV'] = int(
-                    (receive_data[40] << 24) | (receive_data[41] << 16) | (receive_data[38] << 8) | receive_data[39])
-                self.data_layer.data['E_SAVED'] = int(((receive_data[43]) << 8) | (receive_data[42]))
+                    (receive_data[42] << 24) | (receive_data[43] << 16) | (receive_data[40] << 8) | receive_data[41])
 
             else:
                 self.logger.debug("Timed out waiting for result.")
@@ -187,6 +198,7 @@ class DataLayer:
         self.data['E_TUV_day'] = 0
         self.data['E_TUV'] = 0
         self.data['E_SAVED'] = 0
+        self.data['P_REGULATION'] = 0
         self.data["Pm"] = [0]  # minute power
         self.data["Es"] = [0]  # Hour energy
         self.data['D'] = []  # Daily energy
