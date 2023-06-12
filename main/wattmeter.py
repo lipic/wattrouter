@@ -95,7 +95,6 @@ class Wattmeter:
 
                 self.data_layer.data["Es"][0] = len(self.data_layer.data["Es"])
 
-
             else:
                 if len(self.data_layer.data["Es"]) < 97:
                     self.data_layer.data["Es"][len(self.data_layer.data["Es"]) - 3] = self.data_layer.data['E1_P_hour']
@@ -108,7 +107,7 @@ class Wattmeter:
 
         if (self.last_day != int(time.localtime()[2])) and self.time_init and self.time_offset:
             day = {("{0:02}/{1:02}/{2}".format(self.last_month, self.last_day, str(self.last_year)[-2:])): [
-                self.data_layer.data["E1_P_day"], self.data_layer.data["E_SAVED"]]}
+                self.data_layer.data["E1_P_day"], self.data_layer.data["E1_N_day"], self.data_layer.data["E_TUV_day"]]}
             async with self.wattmeter_interface as w:
                 await w.write_wattmeter_register(102, [1])
 
@@ -252,6 +251,7 @@ class FileHandler:
         last_year: int = 0
         positive_energy: int = 0
         negative_energy: int = 0
+        boiler_energy: int = 0
 
         try:
             b = mem_free()
@@ -260,31 +260,33 @@ class FileHandler:
                 line = line.replace("\n", "").replace("/", ":").replace("[", "").replace("]", "").replace(",",
                                                                                                           ":").replace(
                     " ", "").split(":")
-                self.logger.debug("Mem free before:{}; after:{}; diference:{} ".format(b, mem_free(), b - mem_free()))
+                self.logger.debug("Mem free before:{}; after:{}; difference:{} ".format(b, mem_free(), b - mem_free()))
                 if last_month == 0:
                     last_month = int(line[0])
                     last_year = int(line[2])
 
                 if last_month != int(line[0]):
                     if len(energy) < 36:
-                        energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
+                        energy.append("{}/{}:[{},{},{}]".format(last_month, last_year, positive_energy, negative_energy, boiler_energy))
                     else:
                         energy = energy[1:]
-                        energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
+                        energy.append("{}/{}:[{},{},{}]".format(last_month, last_year, positive_energy, negative_energy, boiler_energy))
                     positive_energy = 0
                     negative_energy = 0
+                    boiler_energy = 0
                     last_month = int(line[0])
                     last_year = int(line[2])
 
                 positive_energy += int(line[3])
                 negative_energy += int(line[4])
+                boiler_energy += int(line[5])
                 collect()
 
             if len(energy) < 36:
-                energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
+                energy.append("{}/{}:[{},{},{}]".format(last_month, last_year, positive_energy, negative_energy, boiler_energy))
             else:
                 energy = energy[1:]
-                energy.append("{}/{}:[{},{}]".format(last_month, last_year, positive_energy, negative_energy))
+                energy.append("{}/{}:[{},{},{}]".format(last_month, last_year, positive_energy, negative_energy, boiler_energy))
             if energy is None:
                 return []
             return energy
