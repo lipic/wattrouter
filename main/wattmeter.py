@@ -115,7 +115,7 @@ class Wattmeter:
             self.last_month = int(time.localtime()[1])
             self.last_day = int(time.localtime()[2])
             self.file_handler.write_data(self.daily_consumption, day)
-            self.data_layer.data["D"] = self.file_handler.read_data(self.daily_consumption, 31)
+            self.data_layer.data["D"] = self.file_handler.read_data(self.daily_consumption)
             self.data_layer.data["M"] = self.file_handler.get_monthly_energy(self.daily_consumption)
 
     async def __read_wattmeter_data(self, reg: int, length: int) -> None:
