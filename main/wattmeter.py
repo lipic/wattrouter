@@ -171,6 +171,15 @@ class Wattmeter:
         except Exception as e:
             self.logger.error("Exception: {}. UART is probably not connected.".format(e))
 
+    def negotiation_relay(self):
+        if self.relay.value():
+            self.relay.off()
+            self.data_layer.data["RELAY"] = 0
+            return False
+        else:
+            self.relay.on()
+            self.data_layer.data["RELAY"] = 1
+            return True
 
 class DataLayer:
     def __str__(self) -> json:
