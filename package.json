@@ -18,6 +18,5 @@
     ["inverters/sofar.py", "github:lipic/wattrouter/main/inverters/sofar.py"],
     ["inverters/solax.py", "github:lipic/wattrouter/main/inverters/solax.py"],
     ["inverters/victron.py", "github:lipic/wattrouter/main/inverters/victron.py"]
-
   ]
 }
