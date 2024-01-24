@@ -154,7 +154,7 @@ class Regulation:
 
         # manualni boost talcitkem v apce
         if int(self.config.data['BOOST']) == 0:
-            self.boost_timeout_cnt = int(self.config.data['in,TIMEOUT-RELAY'])
+            self.boost_timeout_cnt = int(self.config.data['in,BOOST-TIMEOUT'])
         else:
             if self.last_minute1 != minute:
                 self.boost_timeout_cnt -= 1
@@ -163,7 +163,9 @@ class Regulation:
                 self.config.data['BOOST'] = "0"
             else:
                 self.target_power = int(self.config.data['in,TUV-POWER'])
-
+        
+        #self.logger.info(f"boost: {self.config.data['BOOST']}, timeout: {self.boost_timeout_cnt}")
+        
         # strida
         self.target_duty = int((self.target_power / int(self.config.data['in,TUV-POWER'])) * 1024)
         if self.target_duty > PWM_MAX:
