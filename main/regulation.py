@@ -44,6 +44,8 @@ class Regulation:
         self.relay_timeout_cnt: int = 0
         self.last_minute: int = 0
         
+        self.boost_timeout_cnt: int = 0
+        self.last_minute1: int = 0        
 
         self.target_duty: int = 0
         self.sec_night_boost: int = 0  # kolik sekund se musinahrivat aby se dosahlo teloty boostu
@@ -151,9 +153,16 @@ class Regulation:
                 #self.logger.debug("ssr sepnuto casovym boostem a soucasne HDO")
 
         # manualni boost talcitkem v apce
-        if int(self.config.data['BOOST']):
-            self.target_power = int(self.config.data['in,TUV-POWER'])
-            #self.logger.debug("SSR sepnuto manualne v overview")
+        if int(self.config.data['BOOST']) == 0:
+            self.boost_timeout_cnt = int(self.config.data['in,TIMEOUT-RELAY'])
+        else:
+            if self.last_minute1 != minute:
+                self.boost_timeout_cnt -= 1
+                self.last_minute1 = minute
+            if self.boost_timeout_cnt < 0:
+                self.config.data['BOOST'] = "0"
+            else:
+                self.target_power = int(self.config.data['in,TUV-POWER'])
 
         # strida
         self.target_duty = int((self.target_power / int(self.config.data['in,TUV-POWER'])) * 1024)
